@@ -12,39 +12,32 @@ import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
 
-// لا حذف الـ abstract هنا
 public abstract class Renderer implements GLEventListener, KeyListener, MouseListener {
     private final GLU glu = new GLU();
     private LevelManager levels;
 
-    // Player
-    private float playerX = 0;
-    private float playerY = 0;
+    // Player 1
+    private float player1X = -3;
+    private float player1Y = 0;
     private float playerSpeed = 0.2f;
-    private Texture playerTexture;
-    private boolean facingRight = true;
-    private int playerHealth;
-    private int playerMaxHealth;
-    private int playerScore = 0;
-    private int totalScore = 0;
-    private boolean flipPlayer = false;
-    private boolean gameOverShown = false;
+    private Texture player1Texture;
+    private boolean player1FacingRight = true;
+    private int player1Health;
+    private int player1MaxHealth;
+    private int player1Score = 0;
+    private String player1Name = "Player1";
 
-    // أضف enum في أعلى Renderer.java
-    private enum GameState {
-        PLAYING,
-        LEVEL_COMPLETE,
-        GAME_OVER,
-        VICTORY,
-        PAUSED
-    }
+    // Player 2
+    private float player2X = 3;
+    private float player2Y = 0;
+    private Texture player2Texture;
+    private boolean player2FacingRight = true;
+    private int player2Health;
+    private int player2MaxHealth;
+    private int player2Score = 0;
+    private String player2Name = "Player2";
 
-    // الجاذبية
-    private float playerVelocityY = 0;
-    private final float GRAVITY = -0.015f;
-    private final float JUMP_FORCE = 0.3f;
-    private boolean isJumping = false;
-    private boolean isOnGround = false;
+    private boolean multiplayer = false;
 
     // Enemy
     private float enemyX = 8;
@@ -54,14 +47,18 @@ public abstract class Renderer implements GLEventListener, KeyListener, MouseLis
     private int enemyHealth;
     private int enemyMaxHealth;
     private boolean enemyAlive = true;
-    private int enemiesKilled = 0;
-    private boolean flipEnemy = false;
 
-    // جاذبية العدو
+    // الجاذبية
+    private float player1VelocityY = 0;
+    private float player2VelocityY = 0;
+    private final float GRAVITY = -0.015f;
+    private final float JUMP_FORCE = 0.3f;
+    private boolean player1OnGround = false;
+    private boolean player2OnGround = false;
     private float enemyVelocityY = 0;
     private boolean enemyOnGround = false;
 
-    // Time System
+    // الوقت
     private long levelStartTime;
     private long currentLevelTime;
     private int levelTimeLimit;
@@ -70,44 +67,39 @@ public abstract class Renderer implements GLEventListener, KeyListener, MouseLis
 
     // Game State
     private GL gl;
-    private boolean fullscreen = false;
-    private JFrame gameFrame;
     private boolean gameRunning = true;
     private boolean gamePaused = false;
+    private JFrame gameFrame;
 
-    // Full screen tracking
-    private int originalWidth = 1200;
-    private int originalHeight = 800;
-    private int originalX, originalY;
-    private int fullscreenMode = 0;
+    // التحكم
+    private boolean player1Left = false, player1Right = false, player1Up = false;
+    private boolean player2Left = false, player2Right = false, player2Up = false;
 
-    // Cooldown for hits
-    private long lastPlayerHitTime = 0;
-    private long lastEnemyHitTime = 0;
-    private final long HIT_COOLDOWN = 1000;
-    private GameState currentState = GameState.PLAYING;
-
-
-    public Renderer(int startLevel) {
+    // Constructor
+    public Renderer(int startLevel, boolean multiplayer, String player1Name, String player2Name) {
+        this.multiplayer = multiplayer;
+        this.player1Name = player1Name;
+        this.player2Name = player2Name;
         levels = new LevelManager(startLevel);
         initStatsForLevel();
         initTimer();
-        updateFlipPlayers();
         initializePositions();
     }
 
+    public Renderer(int startLevel) {
+        this(startLevel, false, "Player1", "Player2");
+    }
+
     public Renderer() {
-        levels = new LevelManager(1);
-        initStatsForLevel();
-        initTimer();
-        updateFlipPlayers();
-        initializePositions();
+        this(1, false, "Player1", "Player2");
     }
 
     private void initStatsForLevel() {
         LevelManager.LevelStats stats = levels.getCurrentLevelStats();
-        playerHealth = stats.playerMaxHealth;
-        playerMaxHealth = stats.playerMaxHealth;
+        player1Health = stats.playerMaxHealth;
+        player1MaxHealth = stats.playerMaxHealth;
+        player2Health = stats.playerMaxHealth;
+        player2MaxHealth = stats.playerMaxHealth;
         enemyHealth = stats.enemyMaxHealth;
         enemyMaxHealth = stats.enemyMaxHealth;
         levelTimeLimit = stats.timeLimit;
@@ -115,20 +107,6 @@ public abstract class Renderer implements GLEventListener, KeyListener, MouseLis
         levelStartTime = System.currentTimeMillis();
         currentLevelTime = 0;
         timeBonus = 0;
-
-        updateFlipPlayers();
-    }
-
-    private void initializePositions() {
-        resetPositions(); // استخدم نفس الدالة
-        System.out.println("Player initialized at: " + playerX + ", " + playerY);
-        System.out.println("Enemy initialized at: " + enemyX + ", " + enemyY);
-    }
-    private void updateFlipPlayers() {
-        LevelManager.LevelStats stats = levels.getCurrentLevelStats();
-        flipPlayer = stats.flipPlayers;
-        flipEnemy = stats.flipPlayers;
-        System.out.println("Players flipped: " + stats.flipPlayers);
     }
 
     private void initTimer() {
@@ -154,60 +132,12 @@ public abstract class Renderer implements GLEventListener, KeyListener, MouseLis
     private void timeUp() {
         if (gameRunning) {
             gameRunning = false;
-            System.out.println("\n⏰ TIME'S UP! ⏰");
-
-            if (gameFrame != null) {
-                gameFrame.setTitle("TIME'S UP! Score: " + (playerScore + timeBonus));
-            }
-
-            JOptionPane.showMessageDialog(gameFrame,
-                    "Time's Up!\nLevel Score: " + playerScore + "\nTotal: " + (playerScore + timeBonus),
-                    "Time's Up!",
-                    JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(gameFrame, "Time's Up!\nFinal Score: " + getTotalScore(), "Game Over", JOptionPane.WARNING_MESSAGE);
         }
     }
 
     public void setGameFrame(JFrame frame) {
         this.gameFrame = frame;
-        this.originalX = frame.getX();
-        this.originalY = frame.getY();
-        updateWindowTitle();
-    }
-
-    // في Renderer.java أضف:
-    private GamePanel gamePanel;
-
-
-
-    // وفي updateWindowTitle() أضف:
-    private void updateWindowTitle() {
-        // إذا كان فيه gamePanel، حدث الـHUD
-        if (gamePanel != null) {
-            gamePanel.setGameInfo(
-                    levels.getLevel(),
-                    playerScore + timeBonus,
-                    playerHealth,
-                    enemyHealth,
-                    getFormattedTime()
-            );
-        }
-    }
-
-    public String getFormattedTime() {
-        int timeRemaining = levelTimeLimit - (int) currentLevelTime;
-        if (timeRemaining < 0) timeRemaining = 0;
-
-        int minutes = timeRemaining / 60;
-        int seconds = timeRemaining % 60;
-        return String.format("%02d:%02d", minutes, seconds);
-    }
-
-    public void stopGame() {
-        gameRunning = false;
-        if (gameTimer != null) {
-            gameTimer.stop();
-        }
-        System.out.println("Game stopped");
     }
 
     @Override
@@ -223,170 +153,133 @@ public abstract class Renderer implements GLEventListener, KeyListener, MouseLis
         loadTextures();
         initializePositions();
 
-        printGameInfo();
+        System.out.println("Game initialized. Mode: " + (multiplayer ? "Multiplayer" : "Single Player"));
+        System.out.println("Player 1: " + player1Name + ", Player 2: " + player2Name);
     }
 
     private void loadTextures() {
+        // Player 1 texture
         try {
-            File playerFile = new File("Assets/Player/player.png");
-            if (playerFile.exists()) {
-                playerTexture = TextureIO.newTexture(playerFile, true);
-                System.out.println("✓ Player texture loaded");
+            File player1File = new File("Assets/player1.png");
+            if (player1File.exists()) {
+                player1Texture = TextureIO.newTexture(player1File, true);
+                System.out.println("✓ Player 1 texture loaded from: " + player1File.getAbsolutePath());
             } else {
-                System.err.println("✗ Player texture not found");
-                playerTexture = null;
+                System.err.println("✗ Player 1 texture not found at: Assets/player1.png");
+                player1Texture = null;
             }
-        } catch (IOException e) {
-            System.err.println("✗ Error loading player texture");
-            playerTexture = null;
+        } catch (Exception e) {
+            System.err.println("Error loading player1 texture: " + e.getMessage());
+            player1Texture = null;
         }
 
+        // Player 2 texture
         try {
-            File enemyFile = new File("Assets/Enemy/enemy.png");
+            File player2File = new File("Assets/player2.png");
+            if (player2File.exists()) {
+                player2Texture = TextureIO.newTexture(player2File, true);
+                System.out.println("✓ Player 2 texture loaded from: " + player2File.getAbsolutePath());
+            } else {
+                System.err.println("✗ Player 2 texture not found at: Assets/player2.png");
+                player2Texture = null;
+            }
+        } catch (Exception e) {
+            System.err.println("Error loading player2 texture: " + e.getMessage());
+            player2Texture = null;
+        }
+
+        // Enemy texture (use player2 if no enemy texture)
+        try {
+            File enemyFile = new File("Assets/player2.png"); // استخدام player2 للعدو
             if (enemyFile.exists()) {
                 enemyTexture = TextureIO.newTexture(enemyFile, true);
-                System.out.println("✓ Enemy texture loaded");
+                System.out.println("✓ Enemy texture loaded (using player2)");
             } else {
-                System.err.println("✗ Enemy texture not found");
                 enemyTexture = null;
             }
-        } catch (IOException e) {
-            System.err.println("✗ Error loading enemy texture");
+        } catch (Exception e) {
+            System.err.println("Error loading enemy texture: " + e.getMessage());
             enemyTexture = null;
         }
     }
 
-    private void printGameInfo() {
-        LevelManager.LevelStats stats = levels.getCurrentLevelStats();
-        System.out.println("\n╔══════════════════════════════════════════════════════════╗");
-        System.out.println("║               BRAWLHALLA - LEVEL " + levels.getLevel() + "                    ║");
-        System.out.println("╠══════════════════════════════════════════════════════════╣");
-        System.out.println("║ Background Flipped:  " + (stats.flipBackground ? "YES ⬆️⬇️" : "NO"));
-        System.out.println("║ Players Flipped:     " + (stats.flipPlayers ? "YES 🔄" : "NO"));
-        System.out.println("║ Time Limit:          " + levelTimeLimit + " seconds");
-        System.out.println("║ Time Bonus:          10 points/second");
-        System.out.println("╚══════════════════════════════════════════════════════════╝\n");
-    }
-
     @Override
     public void display(GLAutoDrawable drawable) {
-        if (currentState != GameState.PLAYING && currentState != GameState.PAUSED) {
-            return; // لا ترسم إذا اللعبة مش شغالة
-        }
-
         if (gl == null) gl = drawable.getGL();
 
         gl.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT);
         gl.glLoadIdentity();
-
         glu.gluLookAt(0, 8, 25, 0, 0, 0, 0, 1, 0);
 
         levels.draw(gl);
 
-        if (currentState == GameState.PLAYING) {
+        if (gameRunning && !gamePaused) {
             applyGravity();
             applyEnemyGravity();
-        }
-        levels.drawPlatforms(gl);
-        if (currentState == GameState.PLAYING) {
+            handlePlayerMovement();
+            levels.drawPlatforms(gl);
+
             if (enemyAlive) {
                 drawEnemy(gl);
                 moveEnemyTowardsPlayer();
             }
-            drawPlayer(gl);
+            drawPlayer1(gl);
+            if (multiplayer) {
+                drawPlayer2(gl);
+            }
             checkCollisions();
-            checkGameStatus(); // **هون بس**
-            updateWindowTitle();
+            checkGameStatus();
         }
-        drawHUD(gl);
     }
 
-    // دالة جديدة لمؤشرات التصحيح
-    private void drawDebugMarkers() {
-        gl.glDisable(GL.GL_TEXTURE_2D);
+    private void handlePlayerMovement() {
+        if (player1Left) {
+            player1X -= playerSpeed;
+            player1FacingRight = false;
+        }
+        if (player1Right) {
+            player1X += playerSpeed;
+            player1FacingRight = true;
+        }
+        if (player1Up && player1OnGround) {
+            player1VelocityY = JUMP_FORCE;
+            player1OnGround = false;
+        }
 
-        java.util.ArrayList<PlatForms> platforms = levels.getPlatforms();
-        if (platforms != null) {
-            for (PlatForms p : platforms) {
-                if (p != null) {
-                    // النقطة الحمراء في وسط المنصة
-                    gl.glColor3f(1, 0, 0);
-                    gl.glPointSize(15.0f);
-                    gl.glBegin(GL.GL_POINTS);
-                    gl.glVertex3f(p.x, p.y + p.h/2, 1.0f); // Z = 1 علشان تظهر فوق
-                    gl.glEnd();
-
-                    // الإطار الأخضر حول المنصة
-                    gl.glColor3f(0, 1, 0);
-                    gl.glLineWidth(3.0f);
-                    gl.glBegin(GL.GL_LINE_LOOP);
-                    gl.glVertex3f(p.x - p.w/2, p.y, 1.0f);
-                    gl.glVertex3f(p.x + p.w/2, p.y, 1.0f);
-                    gl.glVertex3f(p.x + p.w/2, p.y + p.h, 1.0f);
-                    gl.glVertex3f(p.x - p.w/2, p.y + p.h, 1.0f);
-                    gl.glEnd();
-                }
+        if (multiplayer) {
+            if (player2Left) {
+                player2X -= playerSpeed;
+                player2FacingRight = false;
+            }
+            if (player2Right) {
+                player2X += playerSpeed;
+                player2FacingRight = true;
+            }
+            if (player2Up && player2OnGround) {
+                player2VelocityY = JUMP_FORCE;
+                player2OnGround = false;
             }
         }
-        gl.glEnable(GL.GL_TEXTURE_2D);
     }
 
     private void applyGravity() {
-        if (gamePaused || !gameRunning) return;
+        player1VelocityY += GRAVITY;
+        player1Y += player1VelocityY;
+        checkPlayer1PlatformCollision();
 
-        playerVelocityY += GRAVITY;
-        playerY += playerVelocityY;
-
-        checkPlayerPlatformCollision();
-
-        // **سقوط تحت الأرض**
-        if (playerY < -20.0f) {
-            // أوقف اللعبة أولاً
-            gameRunning = false;
-
-            // بعدين اظهر الرسالة (مرة واحدة)
-            if (!gameOverShown) {
-                gameOverShown = true;
-
-                SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(gameFrame,
-                            "💀 GAME OVER!\nYou fell!\nScore: " + (playerScore + timeBonus),
-                            "Fatal Fall",
-                            JOptionPane.ERROR_MESSAGE);
-
-                    if (gameFrame != null) {
-                        gameFrame.dispose();
-                    }
-                });
-            }
-            return; // توقف هنا
+        if (multiplayer) {
+            player2VelocityY += GRAVITY;
+            player2Y += player2VelocityY;
+            checkPlayer2PlatformCollision();
         }
     }
 
-    // أضف في أعلى الكلاس:
-
-    private void applyEnemyGravity() {
-        if (gamePaused || !enemyAlive) return;
-
-        enemyVelocityY += GRAVITY;
-        enemyY += enemyVelocityY;
-
-        checkEnemyPlatformCollision();
-
-        if (enemyY < -10) {
-            enemyY = -10;
-            enemyVelocityY = 0;
-        }
-    }
-
-    private void checkPlayerPlatformCollision() {
-        isOnGround = false;
-        boolean wasOnGround = isOnGround;
-
+    private void checkPlayer1PlatformCollision() {
         java.util.ArrayList<PlatForms> platforms = levels.getPlatforms();
         if (platforms == null) return;
 
-        float playerBottom = playerY - 1.25f; // أسفل اللاعب (افترض طوله 2.5)
+        player1OnGround = false;
+        float playerBottom = player1Y - 1.25f;
 
         for (PlatForms platform : platforms) {
             if (platform == null) continue;
@@ -395,33 +288,55 @@ public abstract class Renderer implements GLEventListener, KeyListener, MouseLis
             float platformRight = platform.x + platform.w / 2;
             float platformTop = platform.y + platform.h;
 
-            // تحقق إذا كان اللاعب فوق المنصة مباشرة
-            boolean isWithinWidth = playerX >= platformLeft - 0.5f && playerX <= platformRight + 0.5f;
+            boolean isWithinWidth = player1X >= platformLeft - 0.5f && player1X <= platformRight + 0.5f;
             boolean isAbovePlatform = playerBottom <= platformTop;
-            boolean isFalling = playerVelocityY <= 0;
+            boolean isFalling = player1VelocityY <= 0;
             float distanceToPlatform = platformTop - playerBottom;
 
             if (isWithinWidth && isAbovePlatform && isFalling && distanceToPlatform >= 0 && distanceToPlatform < 0.8f) {
-                // هبط على المنصة
-                playerY = platformTop + 1.25f; // ضعه فوق المنصة
-                playerVelocityY = 0;
-                isOnGround = true;
-
-                if (!wasOnGround) {
-                    System.out.println("✓ Landed safely on platform");
-                }
+                player1Y = platformTop + 1.25f;
+                player1VelocityY = 0;
+                player1OnGround = true;
                 break;
             }
         }
+    }
 
-        // إذا كان يسقط ولم يهبط على منصة
-        if (!isOnGround && playerVelocityY < -0.1f) {
-            System.out.println("⚠️ Falling! y=" + playerY + ", velocity=" + playerVelocityY);
+    private void checkPlayer2PlatformCollision() {
+        java.util.ArrayList<PlatForms> platforms = levels.getPlatforms();
+        if (platforms == null) return;
+
+        player2OnGround = false;
+        float playerBottom = player2Y - 1.25f;
+
+        for (PlatForms platform : platforms) {
+            if (platform == null) continue;
+
+            float platformLeft = platform.x - platform.w / 2;
+            float platformRight = platform.x + platform.w / 2;
+            float platformTop = platform.y + platform.h;
+
+            boolean isWithinWidth = player2X >= platformLeft - 0.5f && player2X <= platformRight + 0.5f;
+            boolean isAbovePlatform = playerBottom <= platformTop;
+            boolean isFalling = player2VelocityY <= 0;
+            float distanceToPlatform = platformTop - playerBottom;
+
+            if (isWithinWidth && isAbovePlatform && isFalling && distanceToPlatform >= 0 && distanceToPlatform < 0.8f) {
+                player2Y = platformTop + 1.25f;
+                player2VelocityY = 0;
+                player2OnGround = true;
+                break;
+            }
         }
     }
-    private void checkEnemyPlatformCollision() {
-        enemyOnGround = false;
 
+    private void applyEnemyGravity() {
+        if (!enemyAlive) return;
+
+        enemyVelocityY += GRAVITY;
+        enemyY += enemyVelocityY;
+
+        enemyOnGround = false;
         for (PlatForms platform : levels.getPlatforms()) {
             float platformLeft = platform.x - platform.w / 2;
             float platformRight = platform.x + platform.w / 2;
@@ -438,169 +353,40 @@ public abstract class Renderer implements GLEventListener, KeyListener, MouseLis
         }
     }
 
-    private void drawHUD(GL gl) {
-        gl.glPushMatrix();
-        gl.glMatrixMode(GL.GL_PROJECTION);
-        gl.glPushMatrix();
-        gl.glLoadIdentity();
-        gl.glOrtho(0, 800, 0, 600, -1, 1);
-
-        gl.glMatrixMode(GL.GL_MODELVIEW);
-        gl.glPushMatrix();
-        gl.glLoadIdentity();
-
-        gl.glDisable(GL.GL_DEPTH_TEST);
-        gl.glDisable(GL.GL_TEXTURE_2D);
-
-        drawHealthBar2D(gl, 50, 550, 200, 20,
-                (float) playerHealth / playerMaxHealth,
-                Color.GREEN, "Player HP");
-
-        drawHealthBar2D(gl, 50, 520, 200, 20,
-                enemyAlive ? (float) enemyHealth / enemyMaxHealth : 0,
-                Color.RED, "Enemy HP");
-
-        drawTextInfo(gl, 50, 480, "Time: " + getFormattedTime(), Color.WHITE);
-        drawTextInfo(gl, 50, 450, "Score: " + (playerScore + timeBonus), Color.CYAN);
-        drawTextInfo(gl, 50, 420, "Level: " + levels.getLevel(), Color.YELLOW);
-
-        String flipStatus = "Flips: ";
-        LevelManager.LevelStats stats = levels.getCurrentLevelStats();
-        if (stats.flipBackground) flipStatus += "BG ⬆️⬇️ ";
-        if (stats.flipPlayers) flipStatus += "Players 🔄 ";
-        if (!stats.flipBackground && !stats.flipPlayers) flipStatus += "None";
-
-        drawTextInfo(gl, 50, 390, flipStatus, Color.ORANGE);
-        drawTextInfo(gl, 50, 360, "Fullscreen: " + (fullscreen ? "ON (F11)" : "OFF (F11)"),
-                fullscreen ? Color.MAGENTA : Color.WHITE);
-
-        // ============ هنا ضيف المؤشرات الجديدة ============
-
-        // 1. مؤشر السقوط
-        if (!isOnGround && playerY < 0 && playerVelocityY < -0.1f) {
-            drawTextInfo(gl, 350, 320, "⚠️ FALLING!", Color.RED);
-
-            float fallSpeed = Math.abs(playerVelocityY);
-            if (fallSpeed > 0.5f) {
-                drawTextInfo(gl, 330, 300, "HIGH VELOCITY!", Color.ORANGE);
-            }
-        }
-
-        // 2. مؤشر الصحة المنخفضة
-        if (playerHealth < 30 && playerHealth > 0) {
-            drawTextInfo(gl, 350, 280, "💀 LOW HEALTH!", new Color(255, 50, 50));
-        }
-
-        // 3. مؤشر إذا اللاعب تحت الأرض
-        if (playerY < -5) {
-            drawTextInfo(gl, 350, 260, "⬇️ IN PIT!", new Color(255, 100, 0));
-        }
-
-        // 4. مؤشر النط (Jump cooldown)
-        if (!isOnGround && playerVelocityY > 0) {
-            drawTextInfo(gl, 350, 240, "⬆️ JUMPING!", new Color(0, 200, 255));
-        }
-
-        drawTextInfo(gl, 50, 330, "F11: Fullscreen | B: Flip BG | P: Flip Players | Space: Pause", Color.LIGHT_GRAY);
-
-        if (gamePaused) {
-            drawPausedScreen(gl);
-        }
-
-        gl.glEnable(GL.GL_DEPTH_TEST);
-        gl.glMatrixMode(GL.GL_PROJECTION);
-        gl.glPopMatrix();
-        gl.glMatrixMode(GL.GL_MODELVIEW);
-        gl.glPopMatrix();
-        gl.glPopMatrix();
+    private void drawPlayer1(GL gl) {
+        drawPlayer(gl, player1X, player1Y, player1FacingRight, player1Texture, Color.GREEN);
     }
 
-
-    private void drawHealthBar2D(GL gl, float x, float y, float width, float height,
-                                 float percent, Color color, String label) {
-        gl.glColor3f(0.2f, 0.2f, 0.2f);
-        gl.glBegin(GL.GL_QUADS);
-        gl.glVertex2f(x, y);
-        gl.glVertex2f(x + width, y);
-        gl.glVertex2f(x + width, y + height);
-        gl.glVertex2f(x, y + height);
-        gl.glEnd();
-
-        gl.glColor3f(0.4f, 0.4f, 0.4f);
-        gl.glBegin(GL.GL_QUADS);
-        gl.glVertex2f(x + 2, y + 2);
-        gl.glVertex2f(x + width - 2, y + 2);
-        gl.glVertex2f(x + width - 2, y + height - 2);
-        gl.glVertex2f(x + 2, y + height - 2);
-        gl.glEnd();
-
-        float healthWidth = (width - 4) * percent;
-        if (healthWidth > 0) {
-            gl.glColor3f(color.getRed() / 255f, color.getGreen() / 255f, color.getBlue() / 255f);
-            gl.glBegin(GL.GL_QUADS);
-            gl.glVertex2f(x + 2, y + 2);
-            gl.glVertex2f(x + 2 + healthWidth, y + 2);
-            gl.glVertex2f(x + 2 + healthWidth, y + height - 2);
-            gl.glVertex2f(x + 2, y + height - 2);
-            gl.glEnd();
-        }
-
-        gl.glColor3f(1, 1, 1);
-        drawTextInfo(gl, x + 5, y + height / 2 - 4, label + ": " + (int) (percent * 100) + "%", Color.WHITE);
+    private void drawPlayer2(GL gl) {
+        drawPlayer(gl, player2X, player2Y, player2FacingRight, player2Texture, Color.BLUE);
     }
 
-    private void drawTextInfo(GL gl, float x, float y, String text, Color color) {
-        gl.glColor3f(color.getRed() / 255f, color.getGreen() / 255f, color.getBlue() / 255f);
-    }
-
-    private void drawPausedScreen(GL gl) {
-        gl.glColor4f(0, 0, 0, 0.7f);
-        gl.glBegin(GL.GL_QUADS);
-        gl.glVertex2f(0, 0);
-        gl.glVertex2f(800, 0);
-        gl.glVertex2f(800, 600);
-        gl.glVertex2f(0, 600);
-        gl.glEnd();
-
-        gl.glColor3f(1, 1, 0);
-        drawTextInfo(gl, 320, 300, "GAME PAUSED", Color.YELLOW);
-        drawTextInfo(gl, 280, 270, "Press SPACE to resume", Color.WHITE);
-    }
-
-    private void drawPlayer(GL gl) {
+    private void drawPlayer(GL gl, float x, float y, boolean facingRight, Texture texture, Color color) {
         gl.glPushMatrix();
-        gl.glTranslatef(playerX, playerY, 0.1f);
+        gl.glTranslatef(x, y, 0.1f);
 
         if (!facingRight) {
             gl.glScalef(-1, 1, 1);
         }
 
-        if (playerTexture != null) {
+        if (texture != null) {
             gl.glEnable(GL.GL_TEXTURE_2D);
-            playerTexture.bind();
-
-            gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR);
-            gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR);
-
+            texture.bind();
             gl.glColor3f(1, 1, 1);
         } else {
             gl.glDisable(GL.GL_TEXTURE_2D);
-            gl.glColor3f(0f, 0.5f, 1f);
+            gl.glColor3f(color.getRed() / 255f, color.getGreen() / 255f, color.getBlue() / 255f);
         }
 
         float playerWidth = 1.5f;
         float playerHeight = 2.5f;
 
         gl.glBegin(GL.GL_QUADS);
-        if (playerTexture != null) {
-            gl.glTexCoord2f(0, 0);
-            gl.glVertex2f(-playerWidth / 2, -playerHeight / 2-2);
-            gl.glTexCoord2f(1, 0);
-            gl.glVertex2f(playerWidth / 2, -playerHeight / 2-2);
-            gl.glTexCoord2f(1, 1);
-            gl.glVertex2f(playerWidth / 2, playerHeight / 2);
-            gl.glTexCoord2f(0, 1);
-            gl.glVertex2f(-playerWidth / 2, playerHeight / 2);
+        if (texture != null) {
+            gl.glTexCoord2f(0, 0); gl.glVertex2f(-playerWidth / 2, -playerHeight / 2);
+            gl.glTexCoord2f(1, 0); gl.glVertex2f(playerWidth / 2, -playerHeight / 2);
+            gl.glTexCoord2f(1, 1); gl.glVertex2f(playerWidth / 2, playerHeight / 2);
+            gl.glTexCoord2f(0, 1); gl.glVertex2f(-playerWidth / 2, playerHeight / 2);
         } else {
             gl.glVertex2f(-playerWidth / 2, -playerHeight / 2);
             gl.glVertex2f(playerWidth / 2, -playerHeight / 2);
@@ -609,12 +395,9 @@ public abstract class Renderer implements GLEventListener, KeyListener, MouseLis
         }
         gl.glEnd();
 
-        if (playerTexture != null) {
+        if (texture != null) {
             gl.glDisable(GL.GL_TEXTURE_2D);
         }
-
-        drawHealthBar3D(gl, playerHealth, playerMaxHealth,
-                0, playerHeight / 2 + 0.3f, playerWidth, false);
         gl.glPopMatrix();
     }
 
@@ -627,10 +410,6 @@ public abstract class Renderer implements GLEventListener, KeyListener, MouseLis
         if (enemyTexture != null) {
             gl.glEnable(GL.GL_TEXTURE_2D);
             enemyTexture.bind();
-
-            gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR);
-            gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR);
-
             gl.glColor3f(1, 1, 1);
         } else {
             gl.glDisable(GL.GL_TEXTURE_2D);
@@ -642,14 +421,10 @@ public abstract class Renderer implements GLEventListener, KeyListener, MouseLis
 
         gl.glBegin(GL.GL_QUADS);
         if (enemyTexture != null) {
-            gl.glTexCoord2f(0, 0);
-            gl.glVertex2f(-enemyWidth / 2, -enemyHeight / 2);
-            gl.glTexCoord2f(1, 0);
-            gl.glVertex2f(enemyWidth / 2, -enemyHeight / 2);
-            gl.glTexCoord2f(1, 1);
-            gl.glVertex2f(enemyWidth / 2, enemyHeight / 2);
-            gl.glTexCoord2f(0, 1);
-            gl.glVertex2f(-enemyWidth / 2, enemyHeight / 2);
+            gl.glTexCoord2f(0, 0); gl.glVertex2f(-enemyWidth / 2, -enemyHeight / 2);
+            gl.glTexCoord2f(1, 0); gl.glVertex2f(enemyWidth / 2, -enemyHeight / 2);
+            gl.glTexCoord2f(1, 1); gl.glVertex2f(enemyWidth / 2, enemyHeight / 2);
+            gl.glTexCoord2f(0, 1); gl.glVertex2f(-enemyWidth / 2, enemyHeight / 2);
         } else {
             gl.glVertex2f(-enemyWidth / 2, -enemyHeight / 2);
             gl.glVertex2f(enemyWidth / 2, -enemyHeight / 2);
@@ -661,316 +436,128 @@ public abstract class Renderer implements GLEventListener, KeyListener, MouseLis
         if (enemyTexture != null) {
             gl.glDisable(GL.GL_TEXTURE_2D);
         }
-
-        drawHealthBar3D(gl, enemyHealth, enemyMaxHealth,
-                0, enemyHeight / 2 + 0.3f, enemyWidth, false);
         gl.glPopMatrix();
     }
 
-    private void drawHealthBar3D(GL gl, int currentHealth, int maxHealth,
-                                 float x, float y, float width,
-                                 boolean isFlipped) {
-        float healthPercent = (float) currentHealth / maxHealth;
-        float barWidth = width;
-        float barHeight = 0.2f;
-
-        gl.glColor3f(0.2f, 0.2f, 0.2f);
-        gl.glBegin(GL.GL_QUADS);
-        gl.glVertex2f(x - barWidth / 2 - 0.1f, y - 0.05f);
-        gl.glVertex2f(x + barWidth / 2 + 0.1f, y - 0.05f);
-        gl.glVertex2f(x + barWidth / 2 + 0.1f, y + barHeight + 0.05f);
-        gl.glVertex2f(x - barWidth / 2 - 0.1f, y + barHeight + 0.05f);
-        gl.glEnd();
-
-        gl.glColor3f(0.4f, 0.4f, 0.4f);
-        gl.glBegin(GL.GL_QUADS);
-        gl.glVertex2f(x - barWidth / 2, y);
-        gl.glVertex2f(x + barWidth / 2, y);
-        gl.glVertex2f(x + barWidth / 2, y + barHeight);
-        gl.glVertex2f(x - barWidth / 2, y + barHeight);
-        gl.glEnd();
-
-        if (healthPercent > 0.5) gl.glColor3f(0, 1, 0);
-        else if (healthPercent > 0.25) gl.glColor3f(1, 1, 0);
-        else gl.glColor3f(1, 0, 0);
-
-        gl.glBegin(GL.GL_QUADS);
-        gl.glVertex2f(x - barWidth / 2, y);
-        gl.glVertex2f(x - barWidth / 2 + barWidth * healthPercent, y);
-        gl.glVertex2f(x - barWidth / 2 + barWidth * healthPercent, y + barHeight);
-        gl.glVertex2f(x - barWidth / 2, y + barHeight);
-        gl.glEnd();
-    }
-
     private void moveEnemyTowardsPlayer() {
-        if (!enemyAlive || gamePaused || !gameRunning) return; // **أضف !gameRunning**
+        if (!enemyAlive || !gameRunning) return;
 
-        float dx = playerX - enemyX;
-        float dy = playerY - enemyY;
+        float targetX = player1X;
+        float targetY = player1Y;
+
+        if (multiplayer && Math.random() > 0.5) {
+            targetX = player2X;
+            targetY = player2Y;
+        }
+
+        float dx = targetX - enemyX;
+        float dy = targetY - enemyY;
         float distance = (float) Math.sqrt(dx * dx + dy * dy);
 
-        if (distance > 2.0f && enemyOnGround && gameRunning) { // **تأكد من gameRunning**
+        if (distance > 2.0f && enemyOnGround) {
             enemySpeed = 0.03f * (levels.getLevel() * 0.5f + 0.5f);
 
-            // حركة أفقية
             if (Math.abs(dx) > 0.1f) {
                 enemyX += (dx > 0 ? enemySpeed : -enemySpeed);
             }
 
-            // نط نحو اللاعب
-            if (Math.abs(dy) > 0.5f && enemyY < playerY && Math.random() > 0.98) {
+            if (Math.abs(dy) > 0.5f && enemyY < targetY && Math.random() > 0.98) {
                 enemyVelocityY = JUMP_FORCE * 0.8f;
             }
         }
     }
 
     private void checkCollisions() {
-        if (!enemyAlive || !gameRunning || gamePaused) return;
+        if (!enemyAlive || !gameRunning) return;
 
-        float dx = playerX - enemyX;
-        float dy = playerY - enemyY;
-        float distance = (float) Math.sqrt(dx * dx + dy * dy);
+        LevelManager.LevelStats stats = levels.getCurrentLevelStats();
 
-        long currentTime = System.currentTimeMillis();
+        // Check player1 collision with enemy
+        float dist1 = (float) Math.sqrt(Math.pow(player1X - enemyX, 2) + Math.pow(player1Y - enemyY, 2));
+        if (dist1 < 2.0f) {
+            player1Health -= stats.enemyDamage;
+            enemyHealth -= stats.playerDamage;
+            player1Score += 10;
 
-        if (distance < 2.0f && gameRunning) { // **تأكد من gameRunning**
-            LevelManager.LevelStats stats = levels.getCurrentLevelStats();
+            if (player1Health < 0) player1Health = 0;
+            if (enemyHealth < 0) enemyHealth = 0;
 
-            // **أضف cooldown checks**
-            boolean canEnemyHit = (currentTime - lastEnemyHitTime) > HIT_COOLDOWN;
-            boolean canPlayerHit = (currentTime - lastPlayerHitTime) > HIT_COOLDOWN;
+            // Push back
+            player1X += (player1X < enemyX ? -0.5f : 0.5f);
+            player1VelocityY = JUMP_FORCE * 0.3f;
+        }
 
-            if (canEnemyHit) {
-                playerHealth -= stats.enemyDamage;
-                if (playerHealth < 0) playerHealth = 0;
-                lastEnemyHitTime = currentTime;
-
-                System.out.println("⚔️ Enemy hit Player! -" + stats.enemyDamage + " HP");
-
-                // دفع للخلف
-                float pushBack = 0.5f;
-                playerX += (dx > 0 ? pushBack : -pushBack);
-                playerVelocityY = JUMP_FORCE * 0.5f;
-            }
-
-            if (canPlayerHit) {
+        // Check player2 collision with enemy (if multiplayer)
+        if (multiplayer) {
+            float dist2 = (float) Math.sqrt(Math.pow(player2X - enemyX, 2) + Math.pow(player2Y - enemyY, 2));
+            if (dist2 < 2.0f) {
+                player2Health -= stats.enemyDamage;
                 enemyHealth -= stats.playerDamage;
+                player2Score += 10;
+
+                if (player2Health < 0) player2Health = 0;
                 if (enemyHealth < 0) enemyHealth = 0;
-                lastPlayerHitTime = currentTime;
 
-                System.out.println("⚔️ Player hit Enemy! -" + stats.playerDamage + " HP");
-
-                // دفع العدو للخلف
-                float pushBack = 0.5f;
-                enemyX += (dx > 0 ? -pushBack : pushBack);
-                enemyVelocityY = JUMP_FORCE * 0.5f;
-            }
-
-            // **تحقق من الموت**
-            if (playerHealth <= 0) {
-                playerHealth = 0;
-                enemyAlive = false;
-                playerScore -= 50;
-                System.out.println("💀 Player defeated! -50 points");
-            }
-
-            if (enemyHealth <= 0 && enemyAlive) { // **أضف && enemyAlive**
-                enemyHealth = 0;
-                enemyAlive = false;
-                enemiesKilled++;
-                playerScore += stats.pointsForKill;
-                System.out.println("🎯 Enemy killed! +" + stats.pointsForKill + " points");
-
-                // **لا تستدعي checkGameStatus() هنا**
-                // هيتم استدعاؤها تلقائياً في display()
+                // Push back
+                player2X += (player2X < enemyX ? -0.5f : 0.5f);
+                player2VelocityY = JUMP_FORCE * 0.3f;
             }
         }
     }
 
     private void checkGameStatus() {
-        if (!gameRunning || gamePaused) return;
+        if (!gameRunning) return;
 
-        LevelManager.LevelStats stats = levels.getCurrentLevelStats();
-
-        // 1. تحقق من موت اللاعب
-        if (playerHealth <= 0) {
-            playerHealth = 0;
+        // Check if players are dead
+        if (player1Health <= 0 && (!multiplayer || player2Health <= 0)) {
             gameRunning = false;
-
-            // انتظري شوية وبعدين اعرض Game Over
-            new java.util.Timer().schedule(
-                    new java.util.TimerTask() {
-                        @Override
-                        public void run() {
-                            SwingUtilities.invokeLater(() -> {
-                                JOptionPane.showMessageDialog(null,
-                                        "💀 GAME OVER!\n" +
-                                                "Score: " + (playerScore + timeBonus),
-                                        "Game Over",
-                                        JOptionPane.INFORMATION_MESSAGE);
-
-                                // العودة للمنيو
-                                if (gameFrame != null) {
-                                    gameFrame.dispose();
-                                }
-                            });
-                        }
-                    },
-                    500 // انتظر نصف ثانية
-            );
-            return;
-        }
-
-        // 2. تحقق من موت العدو (Level Complete)
-        if (!enemyAlive && enemyHealth <= 0) {
-            int finalScore = playerScore + timeBonus + stats.pointsForWin;
-
-            // أوقفي اللعبة مؤقتاً
-            gameRunning = false;
-
-            // انتظري شوية وبعدين اعرض Level Complete
-            new java.util.Timer().schedule(
-                    new java.util.TimerTask() {
-                        @Override
-                        public void run() {
-                            SwingUtilities.invokeLater(() -> {
-                                int choice = JOptionPane.showOptionDialog(null,
-                                        "🎉 LEVEL " + levels.getLevel() + " COMPLETED!\n" +
-                                                "Score: " + finalScore + "\n\n" +
-                                                "Continue to next level?",
-                                        "Level Complete",
-                                        JOptionPane.YES_NO_OPTION,
-                                        JOptionPane.QUESTION_MESSAGE,
-                                        null,
-                                        new String[]{"Next Level", "Menu"},
-                                        "Next Level");
-
-                                if (choice == 0) { // Next Level
-                                    nextLevel();
-                                } else { // Menu
-                                    if (gameFrame != null) {
-                                        gameFrame.dispose();
-                                    }
-                                }
-                            });
-                        }
-                    },
-                    1000 // انتظر ثانية
-            );
-        }
-    }
-
-    // دالة جديدة لعرض Game Over
-    private void showGameOverDialog() {
-        if (gameFrame != null && gameFrame.isVisible()) {
-            JOptionPane.showMessageDialog(gameFrame,
-                    "💀 GAME OVER!\n" +
-                            "Final Score: " + (playerScore + timeBonus) + "\n" +
-                            "Total Score: " + totalScore,
-                    "Game Over",
-                    JOptionPane.INFORMATION_MESSAGE);
-        }
-    }
-
-    // دالة جديدة لعرض Level Complete
-    private void showLevelCompleteDialog(int levelScore, int totalScore) {
-        if (gameFrame != null && gameFrame.isVisible()) {
-            int choice = JOptionPane.showOptionDialog(gameFrame,
-                    "🎉 LEVEL " + levels.getLevel() + " COMPLETED!\n" +
-                            "Level Score: " + levelScore + "\n" +
-                            "Total Score: " + totalScore + "\n\n" +
-                            "Continue to next level?",
-                    "Level Complete",
-                    JOptionPane.YES_NO_OPTION,
-                    JOptionPane.QUESTION_MESSAGE,
-                    null,
-                    new String[]{"Next Level", "Back to Menu"},
-                    "Next Level");
-
-            if (choice == 0) { // Next Level
-                nextLevel();
-            } else { // Back to Menu
-                if (gameFrame != null) {
-                    gameFrame.dispose();
-                }
-            }
-        }
-    }
-
-    private void nextLevel() {
-        int nextLevel = levels.getLevel() + 1;
-
-        if (nextLevel > 3) {
-            // لو ده آخر مستوى
             SwingUtilities.invokeLater(() -> {
-                JOptionPane.showMessageDialog(null,
-                        "🎉 CONGRATULATIONS!\n" +
-                                "You completed all levels!\n" +
-                                "Final Score: " + (playerScore + timeBonus),
-                        "VICTORY!",
-                        JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(gameFrame,
+                        "Game Over!\n" +
+                                player1Name + " Score: " + player1Score + "\n" +
+                                (multiplayer ? player2Name + " Score: " + player2Score + "\n" : "") +
+                                "Total Score: " + getTotalScore(),
+                        "Game Over",
+                        JOptionPane.ERROR_MESSAGE);
             });
             return;
         }
 
-        // غير المستوى
-        levels.setLevel(nextLevel);
+        // Check if enemy is dead
+        if (enemyHealth <= 0 && enemyAlive) {
+            enemyAlive = false;
+            LevelManager.LevelStats stats = levels.getCurrentLevelStats();
+            player1Score += stats.pointsForKill;
+            if (multiplayer) player2Score += stats.pointsForKill;
 
-        // أعد تعيين كل حاجة
-        LevelManager.LevelStats stats = levels.getCurrentLevelStats();
-        playerHealth = stats.playerMaxHealth;
-        playerMaxHealth = stats.playerMaxHealth;
-        enemyHealth = stats.enemyMaxHealth;
-        enemyMaxHealth = stats.enemyMaxHealth;
-        enemyAlive = true; // مهم جداً!
+            gameRunning = false;
 
-        // أعد تعيين المواقع
-        playerX = 0;
-        playerY = 5;
-        enemyX = 8;
-        enemyY = 5;
-
-        // أعد تعيين السرعات
-        playerVelocityY = 0;
-        enemyVelocityY = 0;
-
-        // أعد تعيين النتيجة للمستوى الجديد
-        playerScore = 0;
-        timeBonus = 0;
-        levelStartTime = System.currentTimeMillis();
-
-        // شغلي اللعبة تاني
-        gameRunning = true;
-        gamePaused = false;
-
-        System.out.println("✅ Level " + nextLevel + " started!");
+            SwingUtilities.invokeLater(() -> {
+                JOptionPane.showMessageDialog(gameFrame,
+                        "Level Complete!\n" +
+                                player1Name + " Score: " + player1Score + "\n" +
+                                (multiplayer ? player2Name + " Score: " + player2Score + "\n" : "") +
+                                "Total Score: " + getTotalScore() + "\n" +
+                                "Time Bonus: " + timeBonus,
+                        "Congratulations",
+                        JOptionPane.INFORMATION_MESSAGE);
+            });
+        }
     }
 
-
-    private void gameCompleted() {
-        gameRunning = false;
-        System.out.println("\n🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉");
-        System.out.println("       CONGRATULATIONS!");
-        System.out.println("   YOU COMPLETED ALL LEVELS!");
-        System.out.println("🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉");
-        System.out.println("Final Total Score: " + totalScore);
-        System.out.println("🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉\n");
-
-        SwingUtilities.invokeLater(() -> {
-            if (gameFrame != null && gameFrame.isVisible()) {
-                JOptionPane.showMessageDialog(gameFrame,
-                        "🎉 CONGRATULATIONS!\n" +
-                                "You completed all levels!\n" +
-                                "Final Total Score: " + totalScore,
-                        "VICTORY!",
-                        JOptionPane.INFORMATION_MESSAGE);
-
-                // العودة للمنيو
-                if (gameFrame != null) {
-                    gameFrame.dispose();
-                }
-            }
-        });
+    private void initializePositions() {
+        player1X = -3;
+        player1Y = 5;
+        player2X = 3;
+        player2Y = 5;
+        enemyX = 8;
+        enemyY = 5;
+        player1VelocityY = 0;
+        player2VelocityY = 0;
+        enemyVelocityY = 0;
+        player1OnGround = true;
+        player2OnGround = true;
+        enemyOnGround = true;
     }
 
     @Override
@@ -990,239 +577,117 @@ public abstract class Renderer implements GLEventListener, KeyListener, MouseLis
     }
 
     @Override
-    public void displayChanged(GLAutoDrawable drawable, boolean modeChanged, boolean deviceChanged) {
-    }
+    public void displayChanged(GLAutoDrawable drawable, boolean modeChanged, boolean deviceChanged) {}
 
     @Override
     public void keyPressed(KeyEvent e) {
-        if (!gameRunning && e.getKeyCode() != KeyEvent.VK_ESCAPE &&
-                e.getKeyCode() != KeyEvent.VK_R && e.getKeyCode() != KeyEvent.VK_F11 &&
-                e.getKeyCode() != KeyEvent.VK_B && e.getKeyCode() != KeyEvent.VK_P) {
-            return;
-        }
-
         switch (e.getKeyCode()) {
             case KeyEvent.VK_ESCAPE:
                 if (gameFrame != null) gameFrame.dispose();
                 break;
-            case KeyEvent.VK_LEFT:
+            // Player 1 Controls (WASD)
             case KeyEvent.VK_A:
-                playerX -= playerSpeed;
-                facingRight = false;
+                player1Left = true;
+                break;
+            case KeyEvent.VK_D:
+                player1Right = true;
+                break;
+            case KeyEvent.VK_W:
+                player1Up = true;
+                break;
+            case KeyEvent.VK_S:
+                player1Y -= playerSpeed;
+                break;
+            // Player 2 Controls (Arrow Keys)
+            case KeyEvent.VK_LEFT:
+                if (multiplayer) player2Left = true;
                 break;
             case KeyEvent.VK_RIGHT:
-            case KeyEvent.VK_D:
-                playerX += playerSpeed;
-                facingRight = true;
+                if (multiplayer) player2Right = true;
                 break;
             case KeyEvent.VK_UP:
-            case KeyEvent.VK_W:
-                if (isOnGround && !gamePaused) {
-                    playerVelocityY = JUMP_FORCE;
-                    isOnGround = false;
-                }
+                if (multiplayer) player2Up = true;
                 break;
             case KeyEvent.VK_DOWN:
-            case KeyEvent.VK_S:
-                playerY -= playerSpeed;
+                if (multiplayer) player2Y -= playerSpeed;
                 break;
-            case KeyEvent.VK_N:
-                if (gl != null && levels.getLevel() < 3) {
-                    nextLevel();
-                }
-                break;
-            case KeyEvent.VK_R:
-                resetPositions();
-                System.out.println("🔄 Positions reset");
-                break;
-            case KeyEvent.VK_F11:
-                toggleFullscreen();
-                break;
-            case KeyEvent.VK_F:
-                toggleFullscreen();
-                break;
-            case KeyEvent.VK_B:
-                levels.toggleFlipBackground();
-                System.out.println("Background flip toggled: " + levels.isFlipBackground());
-                break;
-            case KeyEvent.VK_P:
-                levels.toggleFlipPlayers();
-                updateFlipPlayers();
-                System.out.println("Players flip toggled: " + levels.isFlipPlayers());
-                break;
-            case KeyEvent.VK_H:
-                playerHealth = playerMaxHealth;
-                System.out.println("❤️  Player healed to full!");
-                break;
-            case KeyEvent.VK_T:
-                timeBonus += 100;
-                System.out.println("⏰ +100 time bonus!");
-                break;
+            // Game Controls
             case KeyEvent.VK_SPACE:
                 gamePaused = !gamePaused;
-                System.out.println(gamePaused ? "⏸️ Game Paused" : "▶️ Game Resumed");
+                break;
+            case KeyEvent.VK_F11:
+                if (gameFrame != null) {
+                    if ((gameFrame.getExtendedState() & JFrame.MAXIMIZED_BOTH) == JFrame.MAXIMIZED_BOTH) {
+                        gameFrame.setExtendedState(JFrame.NORMAL);
+                    } else {
+                        gameFrame.setExtendedState(JFrame.MAXIMIZED_BOTH);
+                    }
+                }
                 break;
         }
-    }
-
-    private void toggleFullscreen() {
-        if (gameFrame == null) return;
-
-        fullscreen = !fullscreen;
-
-        if (fullscreen) {
-            originalWidth = gameFrame.getWidth();
-            originalHeight = gameFrame.getHeight();
-            originalX = gameFrame.getX();
-            originalY = gameFrame.getY();
-
-            gameFrame.dispose();
-            gameFrame.setUndecorated(true);
-            gameFrame.setResizable(false);
-
-            GraphicsDevice gd = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
-
-            if (gd.isFullScreenSupported()) {
-                gd.setFullScreenWindow(gameFrame);
-                System.out.println("✅ Fullscreen mode activated");
-            } else {
-                Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
-                gameFrame.setBounds(0, 0, screenSize.width, screenSize.height);
-                System.out.println("⚠️  Fullscreen not supported, using borderless window");
-            }
-
-            gameFrame.setVisible(true);
-            gameFrame.requestFocus();
-
-        } else {
-            GraphicsDevice gd = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
-            if (gd.isFullScreenSupported()) {
-                gd.setFullScreenWindow(null);
-            }
-
-            gameFrame.dispose();
-            gameFrame.setUndecorated(false);
-            gameFrame.setResizable(true);
-            gameFrame.setSize(originalWidth, originalHeight);
-            gameFrame.setLocation(originalX, originalY);
-            gameFrame.setVisible(true);
-            gameFrame.requestFocus();
-
-            System.out.println("✅ Windowed mode activated");
-        }
-
-        updateWindowTitle();
-    }
-
-    private void resetPositions() {
-        java.util.ArrayList<PlatForms> platforms = levels.getPlatforms();
-
-        if (platforms != null && !platforms.isEmpty()) {
-            // اللاعب على المنصة الأولى
-            PlatForms firstPlatform = platforms.get(0);
-            if (firstPlatform != null) {
-                playerX = firstPlatform.x;
-                playerY = firstPlatform.y + firstPlatform.h + 1.25f;
-                System.out.println("✓ Player respawned on platform 1");
-            }
-
-            // العدو على آخر منصة
-            int lastPlatformIndex = platforms.size() - 1;
-            PlatForms lastPlatform = platforms.get(lastPlatformIndex);
-            if (lastPlatform != null) {
-                enemyX = lastPlatform.x;
-                enemyY = lastPlatform.y + lastPlatform.h + 1.25f;
-                System.out.println("✓ Enemy respawned on platform " + (lastPlatformIndex + 1));
-            }
-        } else {
-            playerX = 0;
-            playerY = 5.0f;
-            enemyX = 10;
-            enemyY = 5.0f;
-            System.out.println("⚠️ No platforms found, using default positions");
-        }
-
-        playerVelocityY = 0;
-        isOnGround = true;
-        enemyVelocityY = 0;
-        enemyOnGround = true;
-    }
-    private float getPlatformTop(float xPos) {
-        java.util.ArrayList<PlatForms> platforms = levels.getPlatforms();
-        if (platforms == null || platforms.isEmpty()) {
-            System.err.println("WARNING: No platforms found, returning default height");
-            return 0.0f;
-        }
-
-        float highestTop = -10.0f;
-        boolean foundPlatform = false;
-
-        for (PlatForms platform : platforms) {
-            if (platform == null) continue;
-
-            float platformLeft = platform.x - platform.w / 2;
-            float platformRight = platform.x + platform.w / 2;
-            float platformTop = platform.y + platform.h; // **هنا الخطأ السابق**
-
-            // تحقق إذا كان xPos فوق المنصة
-            if (xPos >= platformLeft && xPos <= platformRight) {
-                if (platformTop > highestTop) {
-                    highestTop = platformTop;
-                    foundPlatform = true;
-                    System.out.println("DEBUG: Found platform for x=" + xPos +
-                            ", top=" + platformTop +
-                            ", platform at (" + platform.x + "," + platform.y +
-                            ") size " + platform.w + "x" + platform.h);
-                }
-            }
-        }
-
-        if (!foundPlatform) {
-            System.err.println("WARNING: No platform under position x=" + xPos);
-        }
-
-        return highestTop;
-    }
-
-    @Override
-    public void keyTyped(KeyEvent e) {
     }
 
     @Override
     public void keyReleased(KeyEvent e) {
+        switch (e.getKeyCode()) {
+            case KeyEvent.VK_A:
+                player1Left = false;
+                break;
+            case KeyEvent.VK_D:
+                player1Right = false;
+                break;
+            case KeyEvent.VK_W:
+                player1Up = false;
+                break;
+            case KeyEvent.VK_LEFT:
+                player2Left = false;
+                break;
+            case KeyEvent.VK_RIGHT:
+                player2Right = false;
+                break;
+            case KeyEvent.VK_UP:
+                player2Up = false;
+                break;
+        }
     }
 
     @Override
-    public void mouseClicked(MouseEvent e) {
-    }
+    public void keyTyped(KeyEvent e) {}
 
     @Override
-    public void mousePressed(MouseEvent e) {
-    }
-
+    public void mouseClicked(MouseEvent e) {}
     @Override
-    public void mouseReleased(MouseEvent e) {
-    }
-
+    public void mousePressed(MouseEvent e) {}
     @Override
-    public void mouseEntered(MouseEvent e) {
-    }
-
+    public void mouseReleased(MouseEvent e) {}
     @Override
-    public void mouseExited(MouseEvent e) {
-    }
+    public void mouseEntered(MouseEvent e) {}
+    @Override
+    public void mouseExited(MouseEvent e) {}
 
-    // إضافة الـgetters المطلوبة
+    // ====== GETTERS ======
     public int getCurrentLevel() {
         return levels.getLevel();
     }
 
-    public int getPlayerScore() {
-        return playerScore + timeBonus;
+    public int getPlayer1Score() {
+        return player1Score;
     }
 
-    public int getPlayerHealth() {
-        return playerHealth;
+    public int getPlayer2Score() {
+        return player2Score;
+    }
+
+    public int getTotalScore() {
+        return player1Score + player2Score + timeBonus;
+    }
+
+    public int getPlayer1Health() {
+        return player1Health;
+    }
+
+    public int getPlayer2Health() {
+        return player2Health;
     }
 
     public int getEnemyHealth() {
@@ -1232,12 +697,32 @@ public abstract class Renderer implements GLEventListener, KeyListener, MouseLis
     public boolean isEnemyAlive() {
         return enemyAlive;
     }
-    // في Renderer.java أضف:
 
-    public void setGamePanel(GamePanel panel) {
-        this.gamePanel = panel;
+    public String getFormattedTime() {
+        int timeRemaining = levelTimeLimit - (int) currentLevelTime;
+        if (timeRemaining < 0) timeRemaining = 0;
+        int minutes = timeRemaining / 60;
+        int seconds = timeRemaining % 60;
+        return String.format("%02d:%02d", minutes, seconds);
     }
 
-    // وفي updateWindowTitle() أضف:
+    public boolean isMultiplayer() {
+        return multiplayer;
+    }
 
+    public void stopGame() {
+        gameRunning = false;
+        if (gameTimer != null) {
+            gameTimer.stop();
+        }
+    }
+    public int getPlayerScore() {
+        return getTotalScore();  // أو return player1Score; حسب ما تريد
+    }
+
+
+    public int getPlayerHealth() {
+        return getPlayer1Health(); // أو أي قيمة افتراضية
+    }
 }
+
