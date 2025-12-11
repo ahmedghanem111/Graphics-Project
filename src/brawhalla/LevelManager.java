@@ -57,7 +57,6 @@ public class LevelManager {
     }
 
     private void initLevelStats() {
-        // لاحظ: level1 flipBackground=true كان عندك سابقًا. لو الخلفية مقلوبة فعلاً اترك true
         levelStats.put(1, new LevelStats(100, 80, 8, 15, 100, 500, 180, true, false));
         levelStats.put(2, new LevelStats(120, 120, 12, 18, 150, 750, 150, false, true));
         levelStats.put(3, new LevelStats(150, 200, 15, 25, 250, 1000, 120, true, true));
@@ -100,6 +99,7 @@ public class LevelManager {
 
     public void nextLevel(GL gl) {
         currentLevel++;
+
         if (currentLevel > 3) currentLevel = 1;
         loadLevel(gl, currentLevel);
     }
@@ -114,6 +114,9 @@ public class LevelManager {
         levelLines.clear();
         levelLines = getLevelLines();
 
+        // طباعة معلومات التصحيح
+        printPlatformInfo();
+
         loadBackgroundTexture(gl);
 
         for (PlatForms p : platforms) {
@@ -125,25 +128,20 @@ public class LevelManager {
         System.out.println("Flip Players: " + stats.flipPlayers);
         System.out.println("==========================\n");
     }
-
-    private void loadBackgroundTexture(GL gl) {
+    public void loadBackgroundTexture(GL gl) {
         try {
             String bgPath = getBackgroundTexturePath();
             File bgFile = new File(bgPath);
             if (bgFile.exists()) {
                 backgroundTexture = TextureIO.newTexture(bgFile, true);
-                // ضبط بعض معاملات الـ texture للحد من تكرار الحواف (مربعات)
-                backgroundTexture.bind();
-                gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_EDGE);
-                gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE);
-                gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR);
-                gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR);
-                System.out.println("✓ Background loaded: " + bgPath);
+                System.out.println("✓ Background loaded: " + bgPath +
+                        " (" + backgroundTexture.getImageWidth() +
+                        "x" + backgroundTexture.getImageHeight() + ")");
             } else {
                 System.err.println("✗ Background not found: " + bgPath);
                 backgroundTexture = null;
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             System.err.println("✗ Error loading background: " + e.getMessage());
             backgroundTexture = null;
         }
@@ -151,20 +149,31 @@ public class LevelManager {
 
     private String getBackgroundTexturePath() {
         switch(currentLevel) {
-            case 1: return "Assets/Levels/level1/DesertBack3.png";
-            case 2: return "Assets/Levels/level2/CityBack3.png";
+            case 1: return "Assets/Levels/level3/SnowBack2.png";
+            case 2: return "Assets/Levels/level1/DesertBack4.png";
             case 3: return "Assets/Levels/Boss level/BossBack1.png";
-            default: return "Assets/Levels/level1/DesertBack3.png";
+            default: return "Assets/Levels/level1/SnowBack.png";
         }
     }
 
     public void draw(GL gl) {
         drawBackground(gl);
+
+        // رسم خطوط المستوى
         for (LevelLine line : levelLines) {
             line.draw(gl);
         }
-        for (PlatForms p : platforms) {
-            p.render(gl);
+
+        // رسم المنصات
+        if (platforms != null) {
+            System.out.println("Drawing " + platforms.size() + " platforms...");
+            for (PlatForms p : platforms) {
+                if (p != null) {
+                    p.render(gl);
+                }
+            }
+        } else {
+            System.err.println("ERROR: platforms list is null in draw()!");
         }
     }
 
@@ -188,6 +197,12 @@ public class LevelManager {
                 gl.glEnable(GL.GL_TEXTURE_2D);
                 backgroundTexture.bind();
 
+                // إعدادات بسيطة وآمنة
+                gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_EDGE);
+                gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE);
+                gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR);
+                gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR);
+
                 gl.glColor3f(1, 1, 1);
             } else {
                 gl.glDisable(GL.GL_TEXTURE_2D);
@@ -209,48 +224,59 @@ public class LevelManager {
             gl.glDisable(GL.GL_TEXTURE_2D);
 
         } catch (Exception e) {
+            System.err.println("Error drawing background: " + e.getMessage());
             e.printStackTrace();
         }
     }
-
 
     public ArrayList<PlatForms> getPlatforms() {
         ArrayList<PlatForms> list = new ArrayList<>();
         switch (currentLevel) {
             case 1:
-                list.add(new PlatForms(0, -3, 30, 6, "Assets/Levels/level1/platform3.png"));
-                list.add(new PlatForms(-15, 3, 20, 5, "Assets/Levels/level1/platform3.png"));
-                list.add(new PlatForms(15, 3, 20, 5, "Assets/Levels/level1/platform3.png"));
+                // **غير الأبعاد هنا**: جعل width أكبر
+                list.add(new PlatForms(0, -2, 30, 4, "Assets/Levels/level3/PlatForm.png")); // كان 25 -> 30
+                list.add(new PlatForms(-15, 4, 20, 3, "Assets/Levels/level3/PlatForm.png")); // كان -12 -> -15, 18 -> 20
+                list.add(new PlatForms(15, 4, 20, 3, "Assets/Levels/level3/PlatForm.png")); // كان 12 -> 15, 18 -> 20
                 break;
 
             case 2:
-                list.add(new PlatForms(0, -2, 25, 4, "Assets/Levels/level2/PlatForm.png"));
-                list.add(new PlatForms(-12, 4, 18, 3, "Assets/Levels/level2/PlatForm.png"));
-                list.add(new PlatForms(12, 4, 18, 3, "Assets/Levels/level2/PlatForm.png"));
+                list.add(new PlatForms(0, -2, 35, 6, "Assets/Levels/level1/platform3.png")); // كان 30 -> 35
+                list.add(new PlatForms(-12, 2, 35, 5, "Assets/Levels/level1/platform3.png")); // كان -15 -> -18, 20 -> 22
+                list.add(new PlatForms(12, 2, 35, 5, "Assets/Levels/level1/platform3.png")); // كان 15 -> 18, 20 -> 22
                 break;
 
             case 3:
-                list.add(new PlatForms(0, -2, 30, 5, "Assets/Levels/Boss level/PlatForm.png"));
-                list.add(new PlatForms(-18, 4, 15, 3, "Assets/Levels/Boss level/PlatForm.png"));
-                list.add(new PlatForms(18, 4, 15, 3, "Assets/Levels/Boss level/PlatForm.png"));
+                list.add(new PlatForms(0, -2, 35, 5, "Assets/Levels/Boss level/PlatForm.png")); // كان 30 -> 35
+                list.add(new PlatForms(-20, 4, 18, 3, "Assets/Levels/Boss level/PlatForm.png")); // كان -18 -> -20
+                list.add(new PlatForms(20, 4, 18, 3, "Assets/Levels/Boss level/PlatForm.png")); // كان 18 -> 20
                 break;
         }
         return list;
     }
-
     public ArrayList<LevelLine> getLevelLines() {
         ArrayList<LevelLine> list = new ArrayList<>();
         switch (currentLevel) {
-            case 1:
-                list.add(new LevelLine(-50, -9, 100, 0.8f, 0.9f, 0.7f, 0.3f));
+            case 1: list.add(new LevelLine(-50, -12, 100, 0.8f, 0.3f, 0.4f, 0.5f));
                 break;
-            case 2:
-                list.add(new LevelLine(-50, -9, 100, 0.8f, 0.3f, 0.4f, 0.5f));
+            case 2: list.add(new LevelLine(-50, -12, 100, 0.8f, 0.9f, 0.7f, 0.3f));
                 break;
-            case 3:
-                list.add(new LevelLine(-50, -9, 100, 0.8f, 0.2f, 0.1f, 0.3f));
+            case 3: list.add(new LevelLine(-50, -12, 100, 0.8f, 0.2f, 0.1f, 0.3f));
                 break;
         }
         return list;
+    }
+    public void printPlatformInfo() {
+        ArrayList<PlatForms> platforms = getPlatforms();
+        System.out.println("\n=== PLATFORMS INFO for Level " + currentLevel + " ===");
+        System.out.println("Number of platforms: " + platforms.size());
+
+        for (int i = 0; i < platforms.size(); i++) {
+            PlatForms p = platforms.get(i);
+            System.out.println("Platform " + i + ":");
+            System.out.println("  Position: (" + p.x + ", " + p.y + ")");
+            System.out.println("  Size: " + p.w + " x " + p.h);
+            System.out.println("  Texture: " + p.imagePath);
+        }
+        System.out.println("====================================\n");
     }
 }

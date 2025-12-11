@@ -18,7 +18,6 @@ public class ArenaEscape extends JFrame {
 
         // ===== BASIC FRAME SETTINGS =====
         setTitle("Arena Escape - Main Menu");
-        setSize(1500, 1000);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
@@ -26,44 +25,42 @@ public class ArenaEscape extends JFrame {
         menuPanel = new MenuPanel(this);
         instructionsPanel = new InstructionsPanel(this);
         highscorePanel = new HighscorePanel(this);
+        gamePanel = new GamePanel(this); // **غير هنا: أنشئه مع الباقي**
 
         // Add all screens to container
         container.add(menuPanel, "menu");
         container.add(instructionsPanel, "instructions");
         container.add(highscorePanel, "highscore");
-        gamePanel = new GamePanel(this);
-        container.add(gamePanel, "game");
+        container.add(gamePanel, "game"); // **أضفه هنا**
 
         add(container);
         setExtendedState(JFrame.MAXIMIZED_BOTH);
         setUndecorated(true);
         setVisible(true);
 
-        // ===== RESIZE LISTENER (for dynamic backgrounds + UI updates) =====
+        // ===== RESIZE LISTENER =====
         addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
-
-                // Resize background of menu
                 menuPanel.resizeBackground();
                 menuPanel.revalidate();
                 menuPanel.repaint();
-
-                // Adjust layouts of other panels
                 instructionsPanel.updateBackPosition();
                 highscorePanel.updateLayout();
             }
         });
-
-
     }
 
     // ===== SCREEN SWITCHER =====
     public void showScreen(String name) {
         card.show(container, name);
 
+        // إذا رجعنا للمنيو، أوقف اللعبة
+        if (name.equals("menu")) {
+            gamePanel.stopGameAndReturn();
+        }
 
-        // Update highscore display depending on solo/multiplayer
+        // Update highscore display
         if (name.equals("highscore")) {
             String p1 = menuPanel.getPlayer1Name();
             String p2 = menuPanel.getPlayer2Name();
@@ -78,15 +75,14 @@ public class ArenaEscape extends JFrame {
 
     // ===== START GAME =====
     public void startGame(int selectedLevel) {
+        // انتقل لشاشة اللعبة أولاً
+        showScreen("game");
 
-        // Run the game on EDT (safe Swing Thread)
+        // ثم ابدأ اللعبة
         SwingUtilities.invokeLater(() -> {
-            Game game3D = new Game(selectedLevel);
-            game3D.setVisible(true);
+            gamePanel.startGame(selectedLevel);
         });
     }
-    
-
 
     // ===== ENTRY POINT =====
     public static void main(String[] args) {

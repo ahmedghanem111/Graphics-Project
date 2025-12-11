@@ -84,14 +84,13 @@ public class Game extends JFrame {
         controlPanel.add(backBtn, BorderLayout.EAST);
 
         // GLCanvas
+        // GLCanvas
         GLCanvas canvas = new GLCanvas();
         renderer = new Renderer(startLevel) {
-            @Override
             public void setValue(Object aValue, boolean isSelected) {
-                // يمكن تجاهل هذا إذا لم تستخدمه
+                // يمكن تجاهل هذا
             }
 
-            @Override
             public Component getComponent() {
                 return null;
             }
